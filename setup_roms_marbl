@@ -1,0 +1,269 @@
+#!/bin/bash
+set -e
+#--------------------------------------------------------------------------------
+# SCRIPT FOR FIRST TIME SETUP
+# This program will acquire the necessary codebases, create an environment for
+# your machine, and set up libraries necessary to run
+
+#--------------------------------------------------------------------------------
+if [[ "$#" -eq 0 || "$1" == "-h" || "$1" == "--help" ]];then    
+    echo "
+	Usage: $(basename "$0") [target_machine]
+
+	Description:
+		Set up ROMS-MARBL for the first time on a machine. This script creates an environment
+		in which to install and  run ROMS-MARBL, and obtains and compiles external codebases.
+
+		After successful setup:
+		      - activate the ROMS-MARBL environment at any time using 'roms_marbl_env'
+		      - You will be prompted to optionally install the roms_marbl_example case
+	
+      	Options:
+	-h, --help : Display this help message
+
+	target_machine : 
+		osx_arm64_gnu          : Install ROMS-MARBL on an (M2) Mac with Apple Silicon (ARM64 architecture)
+		                      using GNU toolchain via Conda
+		sdsc_expanse_intel     : Install ROMS-MARBL on SDSC's Expanse HPC using Intel toolchain
+				      via Environment Modules
+		sdsc_expanse_gnu       : Install ROMS-MARBL on SDSC's Expanse HPC using GNU toolchain
+				      via Environment Modules
+		ncar_derecho_intel     : Install ROMS-MARBL on NCAR's Derecho HPC using Intel toolchain	
+				      via Environment Modules
+		nersc_perlmutter_intel : Install ROMS-MARBL on NERSC's perlmutter HPC using Intel toolchain
+				      via Environment Modules
+		nersc_perlmutter_gnu : Install ROMS-MARBL on NERSC's perlmutter HPC using GNU toolchain
+				      via Environment Modules
+
+	"
+    exit 0
+fi
+
+roms_marbl_setupdir=$(pwd)
+
+################################################################################
+# MACHINE SPECIFIC COMMANDS AND VARIABLE SETTINGS
+case "$1" in
+    osx_arm64_gnu)
+	# 1. CHECKOUT EXTERNALS
+	echo "getting external packages as specified in setup_files/externals_info.sh"
+	#./setup_files/manage_externals/checkout_externals
+	source ./setup_files/externals_info.sh
+	# ROMS:
+	if [ ! -d "${ROMS_LOCAL_PATH}" ];then
+	    git clone "${ROMS_REPO_URL}" "${ROMS_LOCAL_PATH}"
+	    git -C "${ROMS_LOCAL_PATH}" checkout "${ROMS_CHECKOUT_TARGET}"
+	    ROMS_LOCAL_PATH=$(readlink -f "${ROMS_LOCAL_PATH}")
+	fi
+	# MARBL:
+	if [ ! -d "${MARBL_LOCAL_PATH}" ];then
+	    git clone "${MARBL_REPO_URL}" "${MARBL_LOCAL_PATH}"
+	    git -C "${MARBL_LOCAL_PATH}" checkout "${MARBL_CHECKOUT_TARGET}"
+	    MARBL_LOCAL_PATH=$(readlink -f "${MARBL_LOCAL_PATH}")		
+	fi
+	
+	# 2. Set up environment
+	# Check if env exists, install if not
+	roms_marbl_env="$(pwd)/setup_files/conda_envs/roms_marbl_gnu/"
+	if [ -d ${roms_marbl_env} ] ;
+	then echo "conda environment exists.
+       	   	If you have already run this setup script and
+       	       	 are experiencing problems with the environment
+		 then remove it using"
+	     echo "conda env remove -p ${roms_marbl_env}"
+	     echo "and try running this script again"
+	else
+	    conda env create -f setup_files/conda_envs/roms_marbl_gnu.yml --prefix="${roms_marbl_env}"
+	    source $(conda info --base)/etc/profile.d/conda.sh
+	    conda activate "${roms_marbl_env}" 
+	    # Trim prefix in shell PS1 to just env dirname, not full path	    
+	    conda config --set env_prompt '({name})'
+	    # ii. SET ENVIRONMENT VARIABLES
+	    conda env config vars set ROMS_ROOT="${ROMS_LOCAL_PATH}" -p "${roms_marbl_env}" > /dev/null
+	    conda env config vars set MARBL_ROOT="${MARBL_LOCAL_PATH}" -p "${roms_marbl_env}" > /dev/null
+	    conda env config vars set ROMSMARBL_ROOT="$(pwd)" -p "${roms_marbl_env}" > /dev/null
+	    conda env config vars set NETCDFHOME="${roms_marbl_env}" -p "${roms_marbl_env}" > /dev/null
+	    conda env config vars set MPIHOME="${roms_marbl_env}" -p "${roms_marbl_env}" > /dev/null
+	    conda env config vars set ROMSMARBL_SYSTEM="$1" -p "${roms_marbl_env}" > /dev/null
+	    conda activate "${roms_marbl_env}" # The following are dependent on previous env vars so need to activate to see them
+	    conda env config vars set LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$NETCDFHOME/lib" -p "${roms_marbl_env}" > /dev/null
+	    conda env config vars set PATH="$(pwd):$ROMS_ROOT/Tools-Roms:$PATH" -p "${roms_marbl_env}" > /dev/null
+	    conda activate "${roms_marbl_env}"	    
+	    
+	fi
+	# Alias command to go in .zshrc for future environment activation
+ 	ROMSMARBL_ENV_ALIAS=\'"conda activate ${roms_marbl_env}"\'
+	linux_hpc=false
+	compiler=gnu
+	;;
+    
+    sdsc_expanse_intel)
+	linux_hpc=true
+	compiler=intel
+	expected_syshost="expanse"
+	env_file=setup_files/additional_files/sdsc_expanse/expanse_environment.sh
+	;;
+    
+    sdsc_expanse_gnu)
+	echo "https://www.youtube.com/watch?v=ogwouE_Msd4"
+	;;
+    
+    ncar_derecho_intel)
+	linux_hpc=true
+	compiler=intel
+	expected_syshost="derecho"
+	env_file=setup_files/additional_files/ncar_derecho/derecho_environment.sh
+	;;
+    
+    nersc_perlmutter_intel)
+	linux_hpc=true
+	compiler=intel
+	expected_syshost="perlmutter"
+	env_file=setup_files/additional_files/nersc_perlmutter/perlmutter_environment_intel.sh
+	;;
+    nersc_perlmutter_gnu)
+	linux_hpc=true
+	compiler=gnu
+	expected_syshost="perlmutter"
+	env_file=setup_files/additional_files/nersc_perlmutter/perlmutter_environment_gnu.sh
+	;;    
+    *)
+	echo "Your machine $1 is not recognized or may not be supported. For a list of supported
+	systems, run ./setup_roms_marbl -h"
+	exit 1
+	;;
+esac
+
+if [ $linux_hpc = true ];then
+    	if [ "$LMOD_SYSHOST" != "$expected_syshost" ];then
+	    echo "You do not appear to be on $expected_syshost.
+	    If you believe you are reading this message in error, please raise an issue:
+	    https://github.com/CWorthy-ocean/roms_marbl_setup/issues/new
+	    Exiting setup
+	    "
+	    exit 1
+	else
+	    echo "compiling on $expected_syshost"
+	fi
+	
+	# 1. CHECKOUT EXTERNALS
+	echo "getting external packages as specified in setup_files/externals_info.sh"
+	#./setup_files/manage_externals/checkout_externals
+	source ./setup_files/externals_info.sh
+	# ROMS:
+	git clone "${ROMS_REPO_URL}" "${ROMS_LOCAL_PATH}"
+	git checkout -C "${ROMS_LOCAL_PATH}" "${ROMS_CHECKOUT_TARGET}"
+	# MARBL:
+	git clone "${MARBL_REPO_URL}" "${MARBL_LOCAL_PATH}"
+	git checkout -C "${MARBL_LOCAL_PATH}" "${MARBL_CHECKOUT_TARGET}"
+	
+	#2. Set up environment
+	ROMS_ROOT="${ROMS_LOCAL_PATH}"
+	cp "$env_file" "$HOME/.ROMSMARBL"
+	if ! grep -q "export ROMS_ROOT=${ROMS_LOCAL_PATH}" "${HOME}/.ROMSMARBL";then
+	    echo "We are now modifying $HOME/.ROMSMARBL"
+	    echo "export ROMS_ROOT=${ROMS_LOCAL_PATH}"                        >> "$HOME/.ROMSMARBL"
+	    echo "export MARBL_ROOT=${MARBL_LOCAL_PATH}"            >> "$HOME/.ROMSMARBL"
+	    echo "export ROMSMARBL_ROOT=$(pwd)"                  >> "$HOME/.ROMSMARBL"	    
+	    echo "export ROMSMARBL_SYSTEM=$1"                               >> "$HOME/.ROMSMARBL"
+	    echo 'export PATH=$PATH:${ROMS_ROOT}/Tools-Roms'":$(pwd)"   >> "$HOME/.ROMSMARBL"
+	fi
+	source "${HOME}/.ROMSMARBL"
+	echo "nc-config"
+	nc-config --prefix
+	echo "nf-config"
+	nf-config --prefix
+	# Alias command to go in bashrc for future environment activation
+	ROMSMARBL_ENV_ALIAS=\'"source ${HOME}/.ROMSMARBL"\'
+
+
+fi
+
+# UNIVERSAL COMMANDS USING ABOVE CONFIGURED ENVIRONMENTS AND VARIABLES
+################################################################################
+
+
+# 2. COMPILE MARBL
+cd ${MARBL_ROOT}/src
+make ${compiler} USEMPI=TRUE
+cd ${roms_marbl_setupdir}
+
+# 3. COMPILE ROMS/NHMG and ROMS/TOOLS-ROMS LIBRARIES
+
+# i. Distribute universal ROMS makefiles
+ls ${ROMS_ROOT}
+cd setup_files/additional_files/
+rsync -av ROMS_Makefiles/* ${ROMS_ROOT}
+
+## ii. make NHMG library
+cd ${ROMS_ROOT}/Work
+make COMPILER=${compiler} nhmg 
+
+## iii. make Tools-Roms
+cd ${ROMS_ROOT}/Tools-Roms
+make COMPILER=${compiler}
+
+# 4. Establish access to the ROMS-MARBL environment in future
+SHRC="${HOME}/.${SHELL##*/}rc" # .bashrc or .zshrc on OSX
+echo "################################################################################"
+echo "All compilation steps successful!!" 
+if ! grep -q "${ROMSMARBL_ENV_ALIAS}" ${SHRC}; then
+    read -p \
+	 "
+	 This setup script will now modify your ${SHRC} file to enable an environment for running ROMS-MARBL.
+      	 By default, an alias (roms_marbl_env) will be added so that you can quickly set the environment up. Continue? (y/n)
+	 " \
+	 continuestring
+    
+    case ${continuestring} in
+	y|Y)
+	    echo "#SET UP ENVIRONMENT FOR RUNNING ROMS-MARBL:" >> "${SHRC}"
+	    echo "################################################################################" >> "${SHRC}"
+	    echo "alias roms_marbl_env=${ROMSMARBL_ENV_ALIAS}" >> "${SHRC}"
+	    echo "################################################################################" >> "${SHRC}"
+
+	    echo "--------------------------------------------------------------------------------"
+	    echo "Your ${SHRC} file has been modified. In future, enter "
+	    echo "roms_marbl_env"
+	    echo " to activate the environment for running ROMS-MARBL."
+	    echo "NOTE: This will not work until you either log back in or run"
+	    echo "source ${SHRC}"
+	    echo "--------------------------------------------------------------------------------"
+	    ;;
+	*)
+	    echo "--------------------------------------------------------------------------------"
+	    echo "Your ${SHRC} file has not been modified. You will need to manually activate the ROMS_MARBL environment using"
+	    echo "${ROMSMARBL_ENV_ALIAS}"
+	    echo "--------------------------------------------------------------------------------"
+	    ;;
+    esac
+fi
+
+read -p "ROMS-MARBL has been configured on your machine. Would you like to set up the roms_marbl_example case to run?" response
+if [[ "$response" =~ ^[Yy]$ ]]; then
+    casedir=${ROMSMARBL_ROOT}/cases/roms_marbl_example
+    # Download ROMS source code:
+    git clone https://github.com/CWorthy-ocean/cstar_blueprint_roms_marbl_example ${casedir}
+    git -C ${casedir} checkout --quiet no_cstar
+    
+    # Compile
+    cd ${casedir}/code
+    cp ${ROMS_ROOT}/Work/Makefile .
+    if [[ ${ROMSMARBL_SYSTEM} == *"_gnu" ]];then
+	make COMPILER=gnu
+    else
+	make
+    fi
+    if [ -L input_data ];then rm input_data;fi
+    cd ${casedir}; 
+    cd ${casedir}; ln -s code/roms .
+    echo "--------------------------------------------------------------------------------"
+    echo "roms_marbl_example download and compile complete. See "
+    echo "${ROMSMARBL_ROOT}/cases/roms_marbl_example/README.md"
+    echo "for instructions on how to run".
+    echo "--------------------------------------------------------------------------------"
+else
+    exit 0
+fi
+
+
