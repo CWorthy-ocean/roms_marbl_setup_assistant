@@ -1,5 +1,5 @@
 # roms_marbl_setup_assistant
-NOTE: This repository was formally known as C-Star, which has [continued development as a python package](https://github.com/CWorthy-ocean/C-Star). It is now being maintained independently of C-Star.
+NOTE: This repository was formally known as C-Star, which has [continued development as a python package](https://github.com/CWorthy-ocean/C-Star). This repo is now being maintained independently of C-Star.
 
 ## Setup
 - Clone this repository and run (from the command line) the script `setup_roms_marbl` in the top-level directory, providing your system as an argument (e.g. `./setup_roms_marbl osx_arm64_gnu`). For a list of supported systems, run `setup_roms_marbl --help`.
