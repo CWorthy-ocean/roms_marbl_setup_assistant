@@ -1,4 +1,4 @@
-# roms_marbl_setup
+# roms_marbl_setup_assistant
 
 ## Setup
 ### First time setup
