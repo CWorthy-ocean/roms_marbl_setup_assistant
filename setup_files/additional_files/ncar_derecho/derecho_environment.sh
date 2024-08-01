@@ -9,4 +9,4 @@ export NETCDFHOME=$NETCDF
 export PATH="./:$PATH"
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$NETCDFHOME/lib"
 
-# setup_cstar will append absolute paths for ROMS_ROOT and MARBL_ROOT here:
+# setup_roms_marbl will append absolute paths for ROMS_ROOT and MARBL_ROOT here:

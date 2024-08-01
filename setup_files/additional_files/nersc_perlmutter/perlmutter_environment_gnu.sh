@@ -1,6 +1,6 @@
 module restore
 
-# Load C-star related modules
+# Load roms_marbl related modules
 module load cpu
 module load cray-hdf5/1.12.2.9
 module load cray-netcdf/4.9.0.9
