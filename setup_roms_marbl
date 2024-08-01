@@ -51,7 +51,7 @@ error_handler() {
 trap 'error_handler' ERR
 ################################################################################
 # MACHINE SPECIFIC COMMANDS AND VARIABLE SETTINGS
-mkdir -p setup_logs
+mkdir -p "${roms_marbl_setupdir}/setup_logs"
 echo "Setting up ROMS-MARBL. Each step may take a while, please be patient."
 case "$1" in
     osx_arm64_gnu)
@@ -61,18 +61,31 @@ case "$1" in
 	{
 	    source ./setup_files/externals_info.sh
 	    # ROMS:
-	    if [ ! -d "${ROMS_LOCAL_PATH}" ];then
-		git clone "${ROMS_REPO_URL}" "${ROMS_LOCAL_PATH}"
-		git -C "${ROMS_LOCAL_PATH}" checkout "${ROMS_CHECKOUT_TARGET}"
-		ROMS_LOCAL_PATH=$(readlink -f "${ROMS_LOCAL_PATH}")
+	    if [ -d "${ROMS_LOCAL_PATH}"/.git ];then
+		current_remote=$(git -C "${ROMS_LOCAL_PATH}" remote get-url origin)
+		if [ "$current_remote" == "${ROMS_REPO_URL}" ]; then
+		    echo "Repository already found in ${ROMS_LOCAL_PATH}. Skipping clone."
+		else
+		    git clone "${ROMS_REPO_URL}" "${ROMS_LOCAL_PATH}"
+		fi
 	    fi
+	    git -C "${ROMS_LOCAL_PATH}" checkout "${ROMS_CHECKOUT_TARGET}"
+	    ROMS_LOCAL_PATH=$(readlink -f "${ROMS_LOCAL_PATH}")		
+		
 	    # MARBL:
-	    if [ ! -d "${MARBL_LOCAL_PATH}" ];then
-		git clone "${MARBL_REPO_URL}" "${MARBL_LOCAL_PATH}"
-		git -C "${MARBL_LOCAL_PATH}" checkout "${MARBL_CHECKOUT_TARGET}"
-		MARBL_LOCAL_PATH=$(readlink -f "${MARBL_LOCAL_PATH}")		
+	    if [ ! -d "${MARBL_LOCAL_PATH}"/.git ];then
+		current_remote=$(git -C "${MARBL_LOCAL_PATH}" remote get-url origin)
+		if [ "$current_remote" == "${MARBL_REPO_URL}" ]; then
+		    echo "Repository already found in ${MARBL_LOCAL_PATH}. Skipping clone."
+		else
+		    git clone "${MARBL_REPO_URL}" "${MARBL_LOCAL_PATH}"		    
+		fi
 	    fi
-	} > setup_logs/1_checkout_externals.log 2>&1
+	    
+	    git -C "${MARBL_LOCAL_PATH}" checkout "${MARBL_CHECKOUT_TARGET}"
+	    MARBL_LOCAL_PATH=$(readlink -f "${MARBL_LOCAL_PATH}")
+	    
+	} > "${roms_marbl_setupdir}/setup_logs"/1_checkout_externals.log #2>&1
 	echo "...done (see setup_logs/1_checkout_externals.log)."
 	echo "Summary:"
 	echo "  - Cloned ${ROMS_REPO_URL} to ${ROMS_LOCAL_PATH} and checked out ${ROMS_CHECKOUT_TARGET}"
@@ -84,14 +97,20 @@ case "$1" in
 	
 	{
 	    # Check if env exists, install if not
-	    roms_marbl_env="$(pwd)/setup_files/conda_envs/roms_marbl_gnu/"
-	    if [ -d ${roms_marbl_env} ] ;
-	    then echo "conda environment exists.
-       	    	If you have already run this setup script and
-       	    	   	 are experiencing problems with the environment
-			  then remove it using"
-		 echo "conda env remove -p ${roms_marbl_env}"
-		 echo "and try running this script again"
+	    roms_marbl_env="${roms_marbl_setupdir}/setup_files/conda_envs/roms_marbl_gnu/"
+	    if [ -d ${roms_marbl_env} ] ;then
+	       # conda directory exists
+	       if [ -z "$ROMSMARBL_ROOT" ];then
+		   # Environment exists but variable doesn't exist
+		   echo "----------------------------------------" >&2
+		   echo "ERROR: Conda environment ${roms_marbl_env} exists but does not appear to be active." >&2
+		   echo "Activate the environment using either:" >&2
+		   echo "     - the roms_marbl_env command" >&2
+		   echo "     - conda activate ${roms_marbl_env}" >&2
+		   echo "... then run this script again" >&2
+		   exit 1
+	       fi
+	       
 	    else
 		conda env create -f setup_files/conda_envs/roms_marbl_gnu.yml --prefix="${roms_marbl_env}"
 		source $(conda info --base)/etc/profile.d/conda.sh
@@ -116,7 +135,7 @@ case "$1" in
  	ROMSMARBL_ENV_ALIAS=\'"conda activate ${roms_marbl_env}"\'
 	linux_hpc=false
 	compiler=gnu
-	} > setup_logs/2_configure_environment.log 2>&1
+	} > "${roms_marbl_setupdir}/setup_logs"/2_configure_environment.log #2>&1
 	echo "...done (see setup_logs/2_configure_environment.log). "
 	echo "Summary:"
 	echo "    - Created a conda environment at ${roms_marbl_env} with necessary environment variables and dependencies"
@@ -177,15 +196,31 @@ if [ $linux_hpc = true ];then
 	echo "getting external packages as specified in setup_files/externals_info.sh..."	
 	{
 	    source ./setup_files/externals_info.sh
-	    # ROMS:
-	    git clone "${ROMS_REPO_URL}" "${ROMS_LOCAL_PATH}"
-	    git checkout -C "${ROMS_LOCAL_PATH}" "${ROMS_CHECKOUT_TARGET}"
-	    ROMS_LOCAL_PATH=$(readlink -f "${ROMS_LOCAL_PATH}")
+
+	    if [ -d "${ROMS_LOCAL_PATH}"/.git ];then
+		current_remote=$(git -C "${ROMS_LOCAL_PATH}" remote get-url origin)
+		if [ "$current_remote" == "${ROMS_REPO_URL}" ]; then
+		    echo "Repository already found in ${ROMS_LOCAL_PATH}. Skipping clone."
+		else
+		    git clone "${ROMS_REPO_URL}" "${ROMS_LOCAL_PATH}"
+		fi
+	    fi
+	    git -C "${ROMS_LOCAL_PATH}" checkout "${ROMS_CHECKOUT_TARGET}"
+	    ROMS_LOCAL_PATH=$(readlink -f "${ROMS_LOCAL_PATH}")		
+		
 	    # MARBL:
-	    git clone "${MARBL_REPO_URL}" "${MARBL_LOCAL_PATH}"
-	    git checkout -C "${MARBL_LOCAL_PATH}" "${MARBL_CHECKOUT_TARGET}"
-	    MARBL_LOCAL_PATH=$(readlink -f "${MARBL_LOCAL_PATH}")  
-	} > setup_logs/1_checkout_externals.log 2>&1
+	    if [ ! -d "${MARBL_LOCAL_PATH}"/.git ];then
+		current_remote=$(git -C "${MARBL_LOCAL_PATH}" remote get-url origin)
+		if [ "$current_remote" == "${MARBL_REPO_URL}" ]; then
+		    echo "Repository already found in ${ROMS_LOCAL_PATH}. Skipping clone."
+		else
+		    git clone "${MARBL_REPO_URL}" "${MARBL_LOCAL_PATH}"		    
+		fi
+	    fi
+	    git -C "${MARBL_LOCAL_PATH}" checkout "${MARBL_CHECKOUT_TARGET}"
+	    MARBL_LOCAL_PATH=$(readlink -f "${MARBL_LOCAL_PATH}")
+	    
+	} > "${roms_marbl_setupdir}/setup_logs"/1_checkout_externals.log #2>&1
 	echo "...done (see setup_logs/1_checkout_externals.log). "
 	echo "Summary:"
 	echo "  - Cloned ${ROMS_REPO_URL} to ${ROMS_LOCAL_PATH} and checked out ${ROMS_CHECKOUT_TARGET}"
@@ -212,7 +247,7 @@ if [ $linux_hpc = true ];then
 	nf-config --prefix
 	# Alias command to go in bashrc for future environment activation
 	ROMSMARBL_ENV_ALIAS=\'"source ${HOME}/.ROMSMARBL"\'
-	} > setup_logs/2_configure_environment.log 2>&1
+	} > setup_logs/2_configure_environment.log #2>&1
 	echo "...done (see setup_logs/2_configure_environment.log). "
 	echo "Summary:"
 	echo "   - Wrote modules to load and environment variables to ${HOME}/.ROMSMARBL"
@@ -229,7 +264,7 @@ echo "compiling MARBL..."
     cd ${MARBL_ROOT}/src
     make ${compiler} USEMPI=TRUE
     cd ${roms_marbl_setupdir}
-} > setup_logs/3_compile_MARBL.log 2>&1
+} > ${ROMSMARBL_ROOT}/setup_logs/3_compile_MARBL.log #2>&1
 echo "...done (see setup_logs/3_compile_MARBL.log)"
 
 # 3. COMPILE ROMS/NHMG and ROMS/TOOLS-ROMS LIBRARIES
@@ -253,8 +288,9 @@ echo "compiling ROMS..."
     echo "compiling Tools-Roms package..."
     cd ${ROMS_ROOT}/Tools-Roms
     make COMPILER=${compiler}
-    echo "...done"
-} > setup_logs/4_compile_ROMS.log 2>&1
+    cd ${roms_marbl_setupdir}   
+    echo "...done" 
+} > ${roms_marbl_setupdir}/setup_logs/4_compile_ROMS.log 2>&1
 echo "... done (see setup_logs/4_compile_ROMS.log)."
 echo " Summary:"
 echo "   - distributed univeral makefiles from setup_files/additional_files/ROMS_Makefiles"
@@ -307,32 +343,47 @@ if [[ "$response" =~ ^[Yy]$ ]]; then
 	casedir=${ROMSMARBL_ROOT}/cases/roms_marbl_example
 	
 	# Download ROMS source code:
-	git clone "${RME_repo}" "${casedir}"
+	if [ -d "${casedir}/.git" ];then
+	    current_remote=$(git -C "${casedir}" remote get-url origin)
+	    if [ "$current_remote" == "${RME_repo}" ]; then
+		echo "Repository already found in ${casedir}. Skipping clone."
+	    else
+		git clone "${RME_repo}" "${casedir}"		
+	    fi
+	fi
 	git -C "${casedir}" checkout --quiet "${RME_checkout_target}"
+	cd ${roms_marbl_setupdir}
 	
-	# Compile
-	cd ${casedir}/code
-	cp ${ROMS_ROOT}/Work/Makefile .
-    } > setup_logs/5_clone_roms_marbl_example.log 2>&1
+    } > ${roms_marbl_setupdir}/setup_logs/5_clone_roms_marbl_example #2>&1
     echo "...done (see setup_logs/5_clone_roms_marbl_example.log"
     echo " Summary:"
     echo "     - cloned https://github.com/CWorthy-ocean/cstar_blueprint_roms_marbl_example to ${casedir}"
     echo "     - checked out ${RME_checkout_target}"
-
+    # Compile
     echo "Compiling roms_marbl_example..."
     {
+	cd ${casedir}/code
+	cp ${ROMS_ROOT}/Work/Makefile .
+	#    } > setup_logs/5_clone_roms_marbl_example.log 2>&1
+	
 	if [[ ${ROMSMARBL_SYSTEM} == *"_gnu" ]];then
-	    make COMPILER=gnu
+	    if [ -d Compile ];then
+		rm -r Compile;
+	    fi
+	    if [ -e ${casedir}/roms ];then
+		rm ${casedir}/roms
+	    fi
+	    make COMPILER=gnu 2>&1
 	else
-	    make
+	    make 2>&1
 	fi
 	if [ -L input_data ];then
 	    rm input_data;
 	fi
 	
-	cd ${casedir}; 
 	cd ${casedir}; ln -s code/roms .
-    } > setup_logs/6_compile_roms_marbl_example.log 2>&1
+	cd ${ROMSMARBL_ROOT}
+    } > ${roms_marbl_setupdir}/setup_logs/6_compile_roms_marbl_example.log #2>&1
     echo "...done (see setup_logs/6_compile_roms_marbl_example.log"
     
     echo "--------------------------------------------------------------------------------"
@@ -341,7 +392,5 @@ if [[ "$response" =~ ^[Yy]$ ]]; then
     echo "for instructions on how to run".
     echo "--------------------------------------------------------------------------------"
 else
-    exit 0
+   exit 0
 fi
-
-
