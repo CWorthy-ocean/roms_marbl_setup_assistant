@@ -42,13 +42,13 @@ fi
 
 roms_marbl_setupdir=$(pwd)
 
-error_handler() {
-    local last_command="$BASH_COMMAND"
-    echo "Error: Command '${last_command}' failed with exit code $?"
-    echo "Line $LINENO: An error occurred."
-    echo "See the most recent file in the setup_logs directory for details."
-}
-trap 'error_handler' ERR
+# error_handler() {
+#     local last_command="$BASH_COMMAND"
+#     echo "Error: Command '${last_command}' failed with exit code $?"
+#     echo "Line $LINENO: An error occurred."
+#     echo "See the most recent file in the setup_logs directory for details."
+# }
+# trap 'error_handler' ERR
 ################################################################################
 # MACHINE SPECIFIC COMMANDS AND VARIABLE SETTINGS
 mkdir -p "${roms_marbl_setupdir}/setup_logs"
@@ -58,7 +58,7 @@ case "$1" in
     osx_arm64_gnu)
 	# 1. CHECKOUT EXTERNALS
 	echo "getting external packages as specified in setup_files/externals_info.sh..."
-
+	
 	{
 	    source ./setup_files/externals_info.sh
 	    # ROMS:
@@ -209,18 +209,22 @@ if [ $linux_hpc = true ];then
 		else
 		    git clone "${ROMS_REPO_URL}" "${ROMS_LOCAL_PATH}"
 		fi
+	    else
+		git clone "${ROMS_REPO_URL}" "${ROMS_LOCAL_PATH}"		
 	    fi
 	    git -C "${ROMS_LOCAL_PATH}" checkout "${ROMS_CHECKOUT_TARGET}"
 	    ROMS_LOCAL_PATH=$(readlink -f "${ROMS_LOCAL_PATH}")		
 		
 	    # MARBL:
-	    if [ ! -d "${MARBL_LOCAL_PATH}"/.git ];then
+	    if [ -d "${MARBL_LOCAL_PATH}"/.git ];then
 		current_remote=$(git -C "${MARBL_LOCAL_PATH}" remote get-url origin)
 		if [ "$current_remote" == "${MARBL_REPO_URL}" ]; then
 		    echo "Repository already found in ${ROMS_LOCAL_PATH}. Skipping clone."
 		else
 		    git clone "${MARBL_REPO_URL}" "${MARBL_LOCAL_PATH}"		    
 		fi
+	    else
+		git clone "${MARBL_REPO_URL}" "${MARBL_LOCAL_PATH}"
 	    fi
 	    git -C "${MARBL_LOCAL_PATH}" checkout "${MARBL_CHECKOUT_TARGET}"
 	    MARBL_LOCAL_PATH=$(readlink -f "${MARBL_LOCAL_PATH}")
