@@ -2,7 +2,7 @@
 # ROMS
 ROMS_REPO_URL="https://github.com/CESR-lab/ucla-roms.git"
 ROMS_LOCAL_PATH="ucla-roms"
-ROMS_CHECKOUT_TARGET="e7d0e9f38271cea22cbf253e4aa4c1187e242c25" # commit hash
+ROMS_CHECKOUT_TARGET="2a4e9107ffc771d2833fbea3e08f1e169759b5ff" # commit hash
 
 # MARBL
 MARBL_REPO_URL="https://github.com/marbl-ecosys/MARBL.git"
