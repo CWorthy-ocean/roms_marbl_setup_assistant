@@ -185,10 +185,21 @@ case "$1" in
 esac
 
 if [ $linux_hpc = true ];then
-    	if [ "$LMOD_SYSHOST" != "$expected_syshost" ];then
+    if [ -z "$LMOD_SYSHOST" ];then
+	if [ -z "$LMOD_SYSTEM_NAME" ];then
+	   echo "LMOD_SYSHOST and LMOD_SYSTEM_NAME environment variables undefined."
+	   echo "There may be a problem with your environment."
+	   exit 1
+	else
+	    lmod_name="${LMOD_SYSTEM_NAME}"
+	fi
+    else
+	lmod_name="${LMOD_SYSHOST}"
+    fi
+    	if [ "$lmod_name" != "$expected_syshost" ];then
 	    echo "You do not appear to be on $expected_syshost.
 	    If you believe you are reading this message in error, please raise an issue:
-	    https://github.com/CWorthy-ocean/roms_marbl_setup/issues/new
+	    https://github.com/CWorthy-ocean/roms_marbl_setup_assistant/issues/new
 	    Exiting setup
 	    "
 	    exit 1
@@ -311,15 +322,16 @@ SHRC="${HOME}/.${SHELL##*/}rc" # .bashrc or .zshrc on OSX
 echo "################################################################################"
 echo "All compilation steps successful!!" 
 if ! grep -q "${ROMSMARBL_ENV_ALIAS}" ${SHRC}; then
-    read -p \
-	 "
-	 This setup script will now modify your ${SHRC} file to enable an environment for running ROMS-MARBL.
-      	 By default, an alias (roms_marbl_env) will be added so that you can quickly set the environment up. Continue? (y/n)
-	 " \
-	 continuestring
+    while true;do
+	read -p \
+	     "
+	     This setup script will now modify your ${SHRC} file to enable an environment for running ROMS-MARBL.
+             By default, an alias (roms_marbl_env) will be added so that you can quickly set the environment up. Continue? (y/n)
+	     " \
+	     continuestring
     
-    case ${continuestring} in
-	y|Y)
+    case "${continuestring,,}" in
+	y|yes )
 	    echo "#SET UP ENVIRONMENT FOR RUNNING ROMS-MARBL:" >> "${SHRC}"
 	    echo "################################################################################" >> "${SHRC}"
 	    echo "alias roms_marbl_env=${ROMSMARBL_ENV_ALIAS}" >> "${SHRC}"
@@ -332,76 +344,91 @@ if ! grep -q "${ROMSMARBL_ENV_ALIAS}" ${SHRC}; then
 	    echo "NOTE: This will not work until you either log back in or run"
 	    echo "source ${SHRC}"
 	    echo "--------------------------------------------------------------------------------"
+	    break
 	    ;;
-	*)
+	n|no)
 	    echo "--------------------------------------------------------------------------------"
 	    echo "Your ${SHRC} file has not been modified. You will need to manually activate the ROMS_MARBL environment using"
 	    echo "${ROMSMARBL_ENV_ALIAS}"
 	    echo "--------------------------------------------------------------------------------"
+	    break
+	    ;;
+	*)
+	    echo "Please answer y/n"
 	    ;;
     esac
+    done
 fi
-
-read -p "ROMS-MARBL has been configured on your machine. Would you like to set up the roms_marbl_example case to run?" response
-if [[ "$response" =~ ^[Yy]$ ]]; then
-    echo "----------------------------------------"
-    echo "Cloning roms_marbl_example..."
-    {
-	RME_repo="https://github.com/CWorthy-ocean/cstar_blueprint_roms_marbl_example"
-	RME_checkout_target="no_cstar"
-	casedir=${ROMSMARBL_ROOT}/cases/roms_marbl_example
+while true;do
+    read -p "ROMS-MARBL has been configured on your machine. Would you like to set up the roms_marbl_example case to run? (y/n) " response
+    case "${response,,}" in
+	y|yes)
+	    echo "----------------------------------------"
+	    echo "Cloning roms_marbl_example..."
+	    {
+		RME_repo="https://github.com/CWorthy-ocean/cstar_blueprint_roms_marbl_example"
+		RME_checkout_target="no_cstar"
+		casedir=${ROMSMARBL_ROOT}/cases/roms_marbl_example
+		
+		# Download ROMS source code:
+		if [ -d "${casedir}/.git" ];then
+		    current_remote=$(git -C "${casedir}" remote get-url origin)
+		    if [ "$current_remote" == "${RME_repo}" ]; then
+			echo "Repository already found in ${casedir}. Skipping clone."
+		    else
+			git clone "${RME_repo}" "${casedir}"		
+		    fi
+		else
+		    git clone "${RME_repo}" "${casedir}"		
+		fi
+		git -C "${casedir}" checkout --quiet "${RME_checkout_target}"
+		cd ${roms_marbl_setupdir}
 	
-	# Download ROMS source code:
-	if [ -d "${casedir}/.git" ];then
-	    current_remote=$(git -C "${casedir}" remote get-url origin)
-	    if [ "$current_remote" == "${RME_repo}" ]; then
-		echo "Repository already found in ${casedir}. Skipping clone."
-	    else
-		git clone "${RME_repo}" "${casedir}"		
-	    fi
-	else
-	    git clone "${RME_repo}" "${casedir}"		
-	fi
-	git -C "${casedir}" checkout --quiet "${RME_checkout_target}"
-	cd ${roms_marbl_setupdir}
-	
-    } > ${roms_marbl_setupdir}/setup_logs/5_clone_roms_marbl_example #2>&1
-    echo "...done (see setup_logs/5_clone_roms_marbl_example.log"
-    echo " Summary:"
-    echo "     - cloned https://github.com/CWorthy-ocean/cstar_blueprint_roms_marbl_example to ${casedir}"
-    echo "     - checked out ${RME_checkout_target}"
-    # Compile
-    echo "Compiling roms_marbl_example..."
-    {
-	cd ${casedir}/code
-	cp ${ROMS_ROOT}/Work/Makefile .
-	#    } > setup_logs/5_clone_roms_marbl_example.log 2>&1
-	
-	if [[ ${ROMSMARBL_SYSTEM} == *"_gnu" ]];then
-	    if [ -d Compile ];then
-		rm -r Compile;
-	    fi
-	    if [ -e ${casedir}/roms ];then
-		rm ${casedir}/roms
-	    fi
-	    make COMPILER=gnu 2>&1
-	else
-	    make 2>&1
-	fi
-	if [ -L input_data ];then
-	    rm input_data;
-	fi
-	
-	cd ${casedir}; ln -s code/roms .
-	cd ${ROMSMARBL_ROOT}
-    } > ${roms_marbl_setupdir}/setup_logs/6_compile_roms_marbl_example.log #2>&1
-    echo "...done (see setup_logs/6_compile_roms_marbl_example.log"
-    
-    echo "--------------------------------------------------------------------------------"
-    echo "roms_marbl_example download and compile complete. See "
-    echo "${ROMSMARBL_ROOT}/cases/roms_marbl_example/README.md"
-    echo "for instructions on how to run".
-    echo "--------------------------------------------------------------------------------"
-else
-   exit 0
-fi
+	    } > ${roms_marbl_setupdir}/setup_logs/5_clone_roms_marbl_example #2>&1
+	    echo "...done (see setup_logs/5_clone_roms_marbl_example.log"
+	    echo " Summary:"
+	    echo "     - cloned https://github.com/CWorthy-ocean/cstar_blueprint_roms_marbl_example to ${casedir}"
+	    echo "     - checked out ${RME_checkout_target}"
+	    # Compile
+	    echo "Compiling roms_marbl_example..."
+	    {
+		cd ${casedir}/code
+		cp ${ROMS_ROOT}/Work/Makefile .
+		#    } > setup_logs/5_clone_roms_marbl_example.log 2>&1
+		
+		if [[ ${ROMSMARBL_SYSTEM} == *"_gnu" ]];then
+		    if [ -d Compile ];then
+			rm -r Compile;
+		    fi
+		    if [ -e ${casedir}/roms ];then
+			rm ${casedir}/roms
+		    fi
+		    make COMPILER=gnu 2>&1
+		else
+		    make 2>&1
+		fi
+		if [ -L input_data ];then
+		    rm input_data;
+		fi
+		
+		cd ${casedir}; ln -s code/roms .
+		cd ${ROMSMARBL_ROOT}
+	    } > ${roms_marbl_setupdir}/setup_logs/6_compile_roms_marbl_example.log #2>&1
+	    echo "...done (see setup_logs/6_compile_roms_marbl_example.log"
+	    
+	    echo "--------------------------------------------------------------------------------"
+	    echo "roms_marbl_example download and compile complete. See "
+	    echo "${ROMSMARBL_ROOT}/cases/roms_marbl_example/README.md"
+	    echo "for instructions on how to run".
+	    echo "--------------------------------------------------------------------------------"
+	    break
+	    ;;
+	n|no)
+	    echo "Skipping roms_marbl_example download/compile. You can manually perform this step any time"
+	    echo "see https://github.com/CWorthy-ocean/cstar_blueprint_roms_marbl_example."
+	    exit 0
+	    ;;
+	*)
+	    echo "Please answer y/n"
+    esac
+done
