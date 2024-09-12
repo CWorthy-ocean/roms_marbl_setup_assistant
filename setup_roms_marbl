@@ -31,11 +31,10 @@ if [[ "$#" -eq 0 || "$1" == "-h" || "$1" == "--help" ]];then
 				      via Environment Modules
 		ncar_derecho_intel     : Install ROMS-MARBL on NCAR's Derecho HPC using Intel toolchain	
 				      via Environment Modules
-		nersc_perlmutter_intel : Install ROMS-MARBL on NERSC's perlmutter HPC using Intel toolchain
+		nersc_perlmutter_gnu   : Install ROMS-MARBL on NERSC's perlmutter HPC using GNU toolchain
 				      via Environment Modules
-		nersc_perlmutter_gnu : Install ROMS-MARBL on NERSC's perlmutter HPC using GNU toolchain
-				      via Environment Modules
-
+		linux_generic          : Attempt to install ROMS-MARBL on a generic linux machine
+				      via conda (YMMV!)
 	"
     exit 0
 fi
@@ -49,16 +48,38 @@ roms_marbl_setupdir=$(pwd)
 #     echo "See the most recent file in the setup_logs directory for details."
 # }
 # trap 'error_handler' ERR
+
+# First check we can use git:
+if ! command -v git &> /dev/null;
+then
+    echo "Error: git is not installed or not in the PATH."
+    echo "git is required by the ROMS-MARBL setup assistant. See:"
+    echo "https://git-scm.com/downloads"
+
+    exit 1
+fi
+
+
 ################################################################################
 # MACHINE SPECIFIC COMMANDS AND VARIABLE SETTINGS
 mkdir -p "${roms_marbl_setupdir}/setup_logs"
+
 echo "Setting up ROMS-MARBL. Each step may take a while, please be patient."
 echo "In case of an unexpected exit, see setup_logs directory for details"
 case "$1" in
-    osx_arm64_gnu)
+    osx_arm64_gnu | linux_generic)
+	# 0. Check for conda:
+	if ! command -v conda &> /dev/null;
+	then
+	    echo "Error: conda is not installed or not in the PATH."
+	    echo "For $1, conda is required. See:"
+	    echo "https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html"
+	    exit 1
+	fi
+	
 	# 1. CHECKOUT EXTERNALS
 	echo "getting external packages as specified in setup_files/externals_info.sh..."
-	
+
 	{
 	    source ./setup_files/externals_info.sh
 	    # ROMS:
@@ -330,8 +351,8 @@ if ! grep -q "${ROMSMARBL_ENV_ALIAS}" ${SHRC}; then
 	     " \
 	     continuestring
     
-    case "${continuestring,,}" in
-	y|yes )
+    case "${continuestring}" in
+	[yY] | [yY][eE][sS] )
 	    echo "#SET UP ENVIRONMENT FOR RUNNING ROMS-MARBL:" >> "${SHRC}"
 	    echo "################################################################################" >> "${SHRC}"
 	    echo "alias roms_marbl_env=${ROMSMARBL_ENV_ALIAS}" >> "${SHRC}"
@@ -346,7 +367,7 @@ if ! grep -q "${ROMSMARBL_ENV_ALIAS}" ${SHRC}; then
 	    echo "--------------------------------------------------------------------------------"
 	    break
 	    ;;
-	n|no)
+	[nN] | [nN][oO] )
 	    echo "--------------------------------------------------------------------------------"
 	    echo "Your ${SHRC} file has not been modified. You will need to manually activate the ROMS_MARBL environment using"
 	    echo "${ROMSMARBL_ENV_ALIAS}"
@@ -361,8 +382,8 @@ if ! grep -q "${ROMSMARBL_ENV_ALIAS}" ${SHRC}; then
 fi
 while true;do
     read -p "ROMS-MARBL has been configured on your machine. Would you like to set up the roms_marbl_example case to run? (y/n) " response
-    case "${response,,}" in
-	y|yes)
+    case "${response}" in
+	[yY] | [yY][eE][sS] )
 	    echo "----------------------------------------"
 	    echo "Cloning roms_marbl_example..."
 	    {
@@ -423,7 +444,7 @@ while true;do
 	    echo "--------------------------------------------------------------------------------"
 	    break
 	    ;;
-	n|no)
+	[nN] | [nN][oO] )	
 	    echo "Skipping roms_marbl_example download/compile. You can manually perform this step any time"
 	    echo "see https://github.com/CWorthy-ocean/cstar_blueprint_roms_marbl_example."
 	    exit 0
