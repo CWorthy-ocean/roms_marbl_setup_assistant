@@ -186,12 +186,6 @@ case "$1" in
 	env_file=setup_files/additional_files/ncar_derecho/derecho_environment.sh
 	;;
     
-    nersc_perlmutter_intel)
-	linux_hpc=true
-	compiler=intel
-	expected_syshost="perlmutter"
-	env_file=setup_files/additional_files/nersc_perlmutter/perlmutter_environment_intel.sh
-	;;
     nersc_perlmutter_gnu)
 	linux_hpc=true
 	compiler=gnu
