@@ -140,7 +140,7 @@ case "$1" in
 	    else
 		conda env create -f setup_files/conda_envs/roms_marbl_gnu.yml --prefix="${roms_marbl_env}"
 		source $(conda info --base)/etc/profile.d/conda.sh
-		conda activate "${roms_marbl_env}" 
+		#conda activate "${roms_marbl_env}" 
 		# Trim prefix in shell PS1 to just env dirname, not full path	    
 		conda config --set env_prompt '({name})'
 		# ii. SET ENVIRONMENT VARIABLES
@@ -150,9 +150,10 @@ case "$1" in
 		conda env config vars set NETCDFHOME="${roms_marbl_env}" -p "${roms_marbl_env}" > /dev/null
 		conda env config vars set MPIHOME="${roms_marbl_env}" -p "${roms_marbl_env}" > /dev/null
 		conda env config vars set ROMSMARBL_SYSTEM="$1" -p "${roms_marbl_env}" > /dev/null
-		conda activate "${roms_marbl_env}" # The following are dependent on previous env vars so need to activate to see them
-		conda env config vars set LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$NETCDFHOME/lib" -p "${roms_marbl_env}" > /dev/null
-		conda env config vars set PATH="$(pwd):$ROMS_ROOT/Tools-Roms:$PATH" -p "${roms_marbl_env}" > /dev/null
+		# Substituting ${roms_marbl_env} for ${NETCDFHOME} in the next line
+		conda env config vars set LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${roms_marbl_env}/lib" -p "${roms_marbl_env}" > /dev/null
+		conda env config vars set PATH="$(pwd):${ROMS_LOCAL_PATH}/Tools-Roms:$PATH" -p "${roms_marbl_env}" > /dev/null
+		conda activate "${roms_marbl_env}" # FIXME: only works if this is called twice
 		conda activate "${roms_marbl_env}"	    
 		
 	    fi
@@ -299,7 +300,7 @@ echo "compiling MARBL..."
     cd ${MARBL_ROOT}/src
     make ${compiler} USEMPI=TRUE
     cd ${roms_marbl_setupdir}
-} > ${ROMSMARBL_ROOT}/setup_logs/3_compile_MARBL.log 2>&1
+} > ${roms_marbl_setupdir}/setup_logs/3_compile_MARBL.log 2>&1
 echo "...done (see setup_logs/3_compile_MARBL.log)"
 
 # 3. COMPILE ROMS/NHMG and ROMS/TOOLS-ROMS LIBRARIES
